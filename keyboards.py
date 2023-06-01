@@ -1,0 +1,36 @@
+from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
+
+get_state_button = KeyboardButton("Просмотр статистики")
+come_in = KeyboardButton("Приход")
+real_time = KeyboardButton("Взять текущее")
+hand_time =  KeyboardButton("Указать вручную")
+production_report = KeyboardButton("Отчёт производства")
+spoilage_report = KeyboardButton("Отчёт по браку")
+come_out = KeyboardButton("Уход")
+plastic_casting = KeyboardButton("Литьё пластика")
+matrix_manufacturing = KeyboardButton("Изготовление матрицы")
+making_master_model = KeyboardButton("Изготовление мастер модели")
+ED_printing = KeyboardButton("3D печать")
+mech_processing = KeyboardButton("Мех.обработка")
+projects_outside_tasks = KeyboardButton("Задачи вне проектов")
+b_4 = KeyboardButton("ОТК")
+b_6 = KeyboardButton("Рекламация")
+first_variant = KeyboardButton("За сегодня")
+second_variant = KeyboardButton("За неделю")
+third_variant = KeyboardButton("За месяц (30 дней)")
+
+
+come_in_block = ReplyKeyboardMarkup(resize_keyboard = True, one_time_keyboard=True)
+time_block = ReplyKeyboardMarkup(resize_keyboard = True)
+reports_block = ReplyKeyboardMarkup(resize_keyboard = True)
+operations_names_block = ReplyKeyboardMarkup(resize_keyboard = True, one_time_keyboard=True)
+place_of_spoilage_detection = ReplyKeyboardMarkup(resize_keyboard = True, one_time_keyboard=True)
+state_interval = ReplyKeyboardMarkup(resize_keyboard=True)
+
+
+come_in_block.add(come_in).add(get_state_button)
+time_block.add(real_time).insert(hand_time)
+reports_block.add(production_report).insert(spoilage_report).insert(come_out).add(get_state_button)
+operations_names_block.add(plastic_casting).insert(matrix_manufacturing).insert(making_master_model).insert(ED_printing).insert(mech_processing).insert(projects_outside_tasks)
+place_of_spoilage_detection.add(ED_printing).insert(plastic_casting).insert(mech_processing).insert(b_4).insert(matrix_manufacturing).insert(b_6)
+state_interval.add(first_variant).add(second_variant).add(third_variant)
