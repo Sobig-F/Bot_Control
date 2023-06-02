@@ -8,7 +8,7 @@ import os, asyncio
 from settings import TOKEN, Password, directory
 import keyboards
 from database import execute_read_query, query_db, table_state, table_users, connection_users
-from functions import Generate_state, Get_Time_Auto, get_now_date_and_time, append_user, write_in_production, write_in_spoilage, write_time_manually, Get_link_photo
+from functions import *
 
 
 #Класс состояний
