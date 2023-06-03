@@ -1,4 +1,5 @@
-from aiogram.types import Message
+from aiogram.types import Message, ReplyKeyboardMarkup
+from aiogram.dispatcher.filters.state import State
 from aiogram.dispatcher import FSMContext
 from bs4 import BeautifulSoup
 from requests import get
@@ -6,17 +7,15 @@ from googleapiclient.http import MediaFileUpload
 from datetime import datetime, timedelta
 from settings import sheet, month, name_operation, SAMPLE_SPREADSHEET_ID, directory, service_d, folder_id
 from database import execute_read_query, connection_users, query_db
-from keyboards import reports_block
 
 
-def get_now_date_and_time(chat_id):
+def get_now_date_and_time():
     page = get('https://time100.ru/Kazan')
     soup = BeautifulSoup(page.text, "html.parser")
     time = soup.find('span', class_ = "time").text
     data = soup.find('h3', class_ = "display-date monospace").text.split(' ')
     date = data[1] + "." + month[data[2]] + "." + data[3]
-    name = execute_read_query(connection_users, "SELECT name FROM users WHERE chat_id=" + str(chat_id))[0]
-    list_body = [date, time, name]
+    list_body = [date, time]
     return list_body
 
 
@@ -31,32 +30,7 @@ async def append_data(data):
     return
 
 
-async def get_state(name, interval):
-    result = {}
-    data = get_now_date_and_time()[0].split('.')
-    interval_data = datetime(int(data[3]), int(month[data[2]]), int(data[1])) - timedelta(interval - 1)
-    for i in name_operation:
-        count = execute_read_query(connection_users, 'SELECT COUNT(work) FROM state WHERE date > ' + str(interval_data.strftime("%d-%m-%Y")) + ' AND work = "' + str(i) + '" AND id IN(SELECT id FROM users WHERE name = "' + name + '")')[0]
-        ves = execute_read_query(connection_users, 'SELECT SUM(ves) FROM state WHERE date > ' + str(interval_data.strftime("%d-%m-%Y")) + ' AND work = "' + str(i) + '" AND id IN(SELECT id FROM users WHERE name = "' + name + '")')[0]
-        if count == None:
-            count = 0
-        if ves == None:
-            ves = 0
-        result[i] = [count, ves]
-    if interval == 1:
-        message = "Ваш результат за сегодня:\n\n"
-    elif str(interval)[-1] == "1":
-        message = "Ваш результат за " + str(interval) + " день:\n\n"
-    elif str(interval)[-1] in ["2", "3", "4"]:
-        message = "Ваш результат за " + str(interval) + " дня:\n\n"
-    else:
-        message = "Ваш результат за " + str(interval) + " дней:\n\n"
-    for i in name_operation:
-        message += "<b>" + str(i) + "</b>" + ":\n" + "->количество: " + str(result[i][0]) + "\n" + "->вес: " + str(result[i][1]) + "\n\n"
-    return message
-
-
-async def Generate_state(message: Message):
+async def get_state(message: Message, keyboard: ReplyKeyboardMarkup, state: State):
     if message.text == "За сегодня":
         interval = 1
     elif message.text == "За неделю":
@@ -65,12 +39,40 @@ async def Generate_state(message: Message):
         interval = 30
     else:
         interval = int(message.text)
-    text = get_state(execute_read_query(connection_users, "SELECT name FROM users where chat_id = " + str(message.chat.id))[0], interval)
-    await message.answer(text, reply_markup=reports_block, parse_mode="HTML")
+    result = {}
+    data = get_now_date_and_time()[0].split('.')
+    interval_data = datetime(int(data[2]), int(data[1]), int(data[0])) - timedelta(interval - 1)
+    for i in name_operation:
+        count_production = execute_read_query(connection_users, 'SELECT COUNT(work) FROM state WHERE date > ' + str(interval_data.strftime("%d-%m-%Y")) + ' AND work = "' + str(i) + '" AND id IN(SELECT id FROM users WHERE chat_id = "' + str(message.chat.id) + '") AND report = "production"')[0]
+        ves_production = execute_read_query(connection_users, 'SELECT SUM(ves) FROM state WHERE date > ' + str(interval_data.strftime("%d-%m-%Y")) + ' AND work = "' + str(i) + '" AND id IN(SELECT id FROM users WHERE chat_id = "' + str(message.chat.id) + '") AND report = "production"')[0]
+        count_spoilage = execute_read_query(connection_users, 'SELECT COUNT(work) FROM state WHERE date > ' + str(interval_data.strftime("%d-%m-%Y")) + ' AND work = "' + str(i) + '" AND id IN(SELECT id FROM users WHERE chat_id = "' + str(message.chat.id) + '") AND report = "spoilage"')[0]
+        ves_spoilage = execute_read_query(connection_users, 'SELECT SUM(ves) FROM state WHERE date > ' + str(interval_data.strftime("%d-%m-%Y")) + ' AND work = "' + str(i) + '" AND id IN(SELECT id FROM users WHERE chat_id = "' + str(message.chat.id) + '") AND report = "spoilage"')[0]        
+        if count_production == None:
+            count_production = 0
+        if ves_production == None:
+            ves_production = 0
+        if count_spoilage == None:
+            count_spoilage = 0
+        if ves_spoilage == None:
+            ves_spoilage = 0
+        result[i] = [count_production, ves_production, count_spoilage, ves_spoilage]
+    if interval == 1:
+        text = "Ваш результат за сегодня:\n\n"
+    elif str(interval)[-1] == "1":
+        text = "Ваш результат за " + str(interval) + " день:\n\n"
+    elif str(interval)[-1] in ["2", "3", "4"]:
+        text = "Ваш результат за " + str(interval) + " дня:\n\n"
+    else:
+        text = "Ваш результат за " + str(interval) + " дней:\n\n"
+    for i in name_operation:
+        text += "<b><i>" + str(i) + "</i></b>" + ":\n✅<i>Производство</i>\n" + "->количество: " + str(result[i][0]) + "\n" + "->вес: " + str(result[i][1]) + "\n❌<i>Брак</i>\n" + "->количество: " + str(result[i][2]) + "\n" + "->вес: " + str(result[i][3]) + "\n\n"
+    await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
+    await state.set()
 
 
 async def Get_Time_Auto(message: Message, action):
-    list_body = get_now_date_and_time(message.chat.id)
+    list_body = get_now_date_and_time()
+    list_body.append(execute_read_query(connection_users, "SELECT name FROM users WHERE chat_id=" + str(message.chat.id))[0])
     list_body.append(action)
     body = {"values": [list_body]}
     range_update = "Приход/Уход!A2"
@@ -107,7 +109,8 @@ async def write_in_production(message: Message, work_information: FSMContext):
             ]
         }
     await append_data(data=[SAMPLE_SPREADSHEET_ID, range_update, body])
-    await query_db(connection_users, "INSERT INTO state (id, date, work, ves) VALUES ('" + str(id_user) + "', '" + str(date) + "', '" + str(name_operation) + "', '" + str(ves) + "')")
+    if name_operation != "Задачи вне проектов":
+        await query_db(connection_users, "INSERT INTO state (id, date, work, ves, report) VALUES ('" + str(id_user) + "', '" + str(date) + "', '" + str(name_operation) + "', '" + str(ves) + "', 'production')")
 
 
 async def write_in_spoilage(message: Message, work_information: FSMContext):
@@ -118,6 +121,7 @@ async def write_in_spoilage(message: Message, work_information: FSMContext):
     ves = work_information._data.get('ves')
     link_photo = work_information._data.get('link_photo')
     name = work_information._data.get('name')
+    id_user = execute_read_query(connection_users, "SELECT id FROM users where chat_id = " + str(message.chat.id))[0]
     range_update = "Брак производства!A2"
     body = {
             "values" : [
@@ -125,6 +129,7 @@ async def write_in_spoilage(message: Message, work_information: FSMContext):
             ]
         }
     await append_data(data=[SAMPLE_SPREADSHEET_ID, range_update, body])
+    await query_db(connection_users, "INSERT INTO state (id, date, work, ves, report) VALUES ('" + str(id_user) + "', '" + str(date) + "', '" + str(name_operation) + "', '" + str(ves) + "', 'spoilage')")
 
 
 async def write_time_manually(message: Message, action, work_information: FSMContext):
@@ -141,7 +146,7 @@ async def write_time_manually(message: Message, action, work_information: FSMCon
 
 
 def Get_link_photo(message: Message):
-    name = str(get_now_date_and_time(message.chat.id)[0:2])[1:-1]
+    name = str(get_now_date_and_time())[1:-1]
     file_path = directory + "/" + execute_read_query(connection_users, "SELECT name FROM users where chat_id = " + str(message.chat.id))[0] + "_photo.jpg"
     file_metadata = {
                 'name': name,

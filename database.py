@@ -51,6 +51,7 @@ table_state = """
         date DATE NOT NULL,
         work TEXT NOT NULL,
         ves INTEGER NOT NULL,
+        report TEXT NOT NULL,
         FOREIGN KEY (id) REFERENCES users(id)
 )
 """

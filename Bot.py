@@ -74,8 +74,8 @@ async def prihod(message: Message):
         await message.answer("Выберите способ указания даты и времени", reply_markup=keyboards.time_block)
     elif message.text == "Просмотр статистики":
         await message.answer("Отправьте количество дней или выберите из предложенных вариантов: ", reply_markup = keyboards.state_interval)
-    else:
-        await Generate_state(message)
+    elif (message.text == "За сегодня") or (message.text == "За неделю") or (message.text == "За месяц (30 дней)") or (message.text == str(int(message.text))):
+        await get_state(message, keyboards.come_in_block, ClientState.Prihod)
 
 
 #Добавление времени прихода
@@ -114,15 +114,15 @@ async def input_time(message: Message, state: FSMContext):
 @dp.message_handler(state=ClientState.InputReport)
 async def input_report(message: Message, state: FSMContext):
     if message.text == "Отчёт производства":
-        list_body = get_now_date_and_time(message.chat.id)
+        date = get_now_date_and_time()[0]
         async with state.proxy() as work_information:
-            work_information['date'] = list_body[0]
+            work_information['date'] = date
         await ClientState.OperationNames.set()
         await message.answer("Выберите название операции", reply_markup=keyboards.operations_names_block)
     elif message.text == "Отчёт по браку":
-        list_body = get_now_date_and_time(message.chat.id)
+        date = get_now_date_and_time()[0]
         async with state.proxy() as work_information:
-            work_information['date'] = list_body[0]
+            work_information['date'] = date
         await ClientState.OperationSpoilageNames.set()
         await message.answer("Выберите, где обнаружен брак", reply_markup=keyboards.place_of_spoilage_detection)
     elif message.text == "Уход":
@@ -130,8 +130,8 @@ async def input_report(message: Message, state: FSMContext):
         await message.answer("Выберите способ указания времени", reply_markup=keyboards.time_block)
     elif message.text == "Просмотр статистики":
         await message.answer("Отправьте количество дней или выберите из предложенных вариантов: ", reply_markup = keyboards.state_interval)
-    else:
-        await Generate_state(message)
+    elif (message.text == "За сегодня") or (message.text == "За неделю") or (message.text == "За месяц (30 дней)") or (message.text == str(int(message.text))):
+        await get_state(message, keyboards.reports_block, ClientState.InputReport)
 
 
 #Выбор названия операции на клавиатуре
@@ -283,6 +283,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    asyncio.get_event_loop().run_until_complete(main())
     start_polling(dp, skip_updates=True)
