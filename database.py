@@ -30,8 +30,7 @@ def execute_read_query(connection, query):
 
         if (len(result) != 0):
             if (len(result[i]) == 1):
-                for i in range(0, len(result)):
-                    result[i] = result[i][0]
+                result[0] = result[0][0]
         return result
     except sqlite3.Error as e:
         print(f"The error '{e}' occurred")
@@ -42,7 +41,7 @@ table_users = """
         id INTEGER PRIMARY KEY,
         chat_id INTEGER NOT NULL UNIQUE,
         name TEXT NOT NULL
-)
+    )
 """
 
 table_state = """
@@ -53,7 +52,15 @@ table_state = """
         ves INTEGER NOT NULL,
         report TEXT NOT NULL,
         FOREIGN KEY (id) REFERENCES users(id)
-)
+    )
+"""
+
+table_Clien_State = """
+    CREATE TABLE IF NOT EXISTS client_states (
+        chat_id INTEGER,
+        state TEXT,
+        FOREIGN KEY (chat_id) REFERENCES users(chat_id)
+    )
 """
 
 connection_users = connection_db()

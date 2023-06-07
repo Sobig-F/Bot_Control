@@ -1,20 +1,23 @@
-from aiogram.types import Message, ReplyKeyboardMarkup
-from aiogram.dispatcher.filters.state import State
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.dispatcher import FSMContext
+from aiogram import Dispatcher
 from bs4 import BeautifulSoup
 from requests import get
 from googleapiclient.http import MediaFileUpload
 from datetime import datetime, timedelta
-from settings import sheet, month, name_operation, SAMPLE_SPREADSHEET_ID, directory, service_d, folder_id
+from settings import sheet, name_operation, SAMPLE_SPREADSHEET_ID, directory, service_d, folder_id, states
 from database import execute_read_query, connection_users, query_db
 
 
+
 def get_now_date_and_time():
-    page = get('https://time100.ru/Kazan')
+    page = get('http://www.unn.ru/time/')
     soup = BeautifulSoup(page.text, "html.parser")
-    time = soup.find('span', class_ = "time").text
-    data = soup.find('h3', class_ = "display-date monospace").text.split(' ')
-    date = data[1] + "." + month[data[2]] + "." + data[3]
+    time = soup.find('div', id="servertime").text[1:-3]
+    page = get('http://www.датасегодня.рф')
+    soup = BeautifulSoup(page.text, "html.parser")
+    date = soup.find('p', id="digital_date").text
     list_body = [date, time]
     return list_body
 
@@ -30,7 +33,7 @@ async def append_data(data):
     return
 
 
-async def get_state(message: Message, keyboard: ReplyKeyboardMarkup, state: State):
+async def get_state(message: Message, keyboard: ReplyKeyboardMarkup, state: State, chat_id):
     if message.text == "За сегодня":
         interval = 1
     elif message.text == "За неделю":
@@ -43,10 +46,10 @@ async def get_state(message: Message, keyboard: ReplyKeyboardMarkup, state: Stat
     data = get_now_date_and_time()[0].split('.')
     interval_data = datetime(int(data[2]), int(data[1]), int(data[0])) - timedelta(interval - 1)
     for i in name_operation:
-        count_production = execute_read_query(connection_users, 'SELECT COUNT(work) FROM state WHERE date > ' + str(interval_data.strftime("%d-%m-%Y")) + ' AND work = "' + str(i) + '" AND id IN(SELECT id FROM users WHERE chat_id = "' + str(message.chat.id) + '") AND report = "production"')[0]
-        ves_production = execute_read_query(connection_users, 'SELECT SUM(ves) FROM state WHERE date > ' + str(interval_data.strftime("%d-%m-%Y")) + ' AND work = "' + str(i) + '" AND id IN(SELECT id FROM users WHERE chat_id = "' + str(message.chat.id) + '") AND report = "production"')[0]
-        count_spoilage = execute_read_query(connection_users, 'SELECT COUNT(work) FROM state WHERE date > ' + str(interval_data.strftime("%d-%m-%Y")) + ' AND work = "' + str(i) + '" AND id IN(SELECT id FROM users WHERE chat_id = "' + str(message.chat.id) + '") AND report = "spoilage"')[0]
-        ves_spoilage = execute_read_query(connection_users, 'SELECT SUM(ves) FROM state WHERE date > ' + str(interval_data.strftime("%d-%m-%Y")) + ' AND work = "' + str(i) + '" AND id IN(SELECT id FROM users WHERE chat_id = "' + str(message.chat.id) + '") AND report = "spoilage"')[0]        
+        count_production = execute_read_query(connection_users, 'SELECT COUNT(work) FROM state WHERE date > ' + str(interval_data.strftime("%d-%m-%Y")) + ' AND work = "' + str(i) + '" AND id IN(SELECT id FROM users WHERE chat_id = "' + str(chat_id) + '") AND report = "production"')[0]
+        ves_production = execute_read_query(connection_users, 'SELECT SUM(ves) FROM state WHERE date > ' + str(interval_data.strftime("%d-%m-%Y")) + ' AND work = "' + str(i) + '" AND id IN(SELECT id FROM users WHERE chat_id = "' + str(chat_id) + '") AND report = "production"')[0]
+        count_spoilage = execute_read_query(connection_users, 'SELECT COUNT(work) FROM state WHERE date > ' + str(interval_data.strftime("%d-%m-%Y")) + ' AND work = "' + str(i) + '" AND id IN(SELECT id FROM users WHERE chat_id = "' + str(chat_id) + '") AND report = "spoilage"')[0]
+        ves_spoilage = execute_read_query(connection_users, 'SELECT SUM(ves) FROM state WHERE date > ' + str(interval_data.strftime("%d-%m-%Y")) + ' AND work = "' + str(i) + '" AND id IN(SELECT id FROM users WHERE chat_id = "' + str(chat_id) + '") AND report = "spoilage"')[0]        
         if count_production == None:
             count_production = 0
         if ves_production == None:
@@ -56,14 +59,15 @@ async def get_state(message: Message, keyboard: ReplyKeyboardMarkup, state: Stat
         if ves_spoilage == None:
             ves_spoilage = 0
         result[i] = [count_production, ves_production, count_spoilage, ves_spoilage]
+    name = execute_read_query(connection_users, "SELECT name FROM users WHERE chat_id=" + str(chat_id))[0]
     if interval == 1:
-        text = "Ваш результат за сегодня:\n\n"
+        text = name + ", результат за сегодня:\n\n"
     elif str(interval)[-1] == "1":
-        text = "Ваш результат за " + str(interval) + " день:\n\n"
+        text = ", результат за " + str(interval) + " день:\n\n"
     elif str(interval)[-1] in ["2", "3", "4"]:
-        text = "Ваш результат за " + str(interval) + " дня:\n\n"
+        text = name + ", результат за " + str(interval) + " дня:\n\n"
     else:
-        text = "Ваш результат за " + str(interval) + " дней:\n\n"
+        text = name + ", результат за " + str(interval) + " дней:\n\n"
     for i in name_operation:
         text += "<b><i>" + str(i) + "</i></b>" + ":\n✅<i>Производство</i>\n" + "->количество: " + str(result[i][0]) + "\n" + "->вес: " + str(result[i][1]) + "\n❌<i>Брак</i>\n" + "->количество: " + str(result[i][2]) + "\n" + "->вес: " + str(result[i][3]) + "\n\n"
     await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
@@ -156,3 +160,27 @@ def Get_link_photo(message: Message):
     id_photo_in_drive = service_d.files().create(body=file_metadata, media_body=media, fields='id').execute()
     photo_link = "https://drive.google.com/file/d/" + id_photo_in_drive['id'] + "/view?usp=share_link"
     return photo_link, file_path
+
+
+async def update_client_state(state: StatesGroup, chat_id):
+    new_state = str(state).split(':')[1]
+    if chat_id in execute_read_query(connection_users, "SELECT chat_id FROM client_states"):
+        await query_db(connection_users, "UPDATE client_states SET state='" + new_state + "' WHERE chat_id=" + str(chat_id))
+    else:
+        await query_db(connection_users, "INSERT INTO client_states (chat_id, state) VALUES (" + str(chat_id) + ", '" + new_state + "')")
+
+
+async def set_users_state(dp: Dispatcher):
+    chat_id_list = execute_read_query(connection_users, "SELECT chat_id FROM client_states")
+    for chat_id in chat_id_list:
+        state = dp.current_state(chat=chat_id)
+        await state.set_state(states[execute_read_query(connection_users, "SELECT state FROM client_states WHERE chat_id=" + str(chat_id))[0]])
+
+
+def create_list_kb() -> ReplyKeyboardMarkup:
+    name_list = execute_read_query(connection_users, "SELECT name FROM users")
+    kb = []
+    for name in name_list:
+        kb.append([KeyboardButton(name)])
+    dynamic_kb = ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+    return dynamic_kb
